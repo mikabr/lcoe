@@ -1,0 +1,44 @@
+/*-- scss:functions --*/
+
+/*-- scss:defaults --*/
+
+$primary: #8c1515;
+
+/*-- scss:rules --*/
+
+@font-face {
+  font-family: "news-gothic";
+  src: url("fonts/news-gothic-std.woff") format("woff");
+  font-weight: normal;
+  font-style: normal
+}
+
+@font-face {
+  font-family: "news-gothic";
+  src: url("fonts/news-gothic-bold.woff") format("woff");
+  font-weight: bold;
+  font-style: normal
+}
+
+//.control-label {
+//  font-weight: bold;
+//}
+
+.quarto-dashboard .toolbar .shiny-input-select {
+  min-width: 10em;
+  margin-bottom: 0;
+  margin-right: 1em;
+  display: flex;
+}
+
+.quarto-dashboard .toolbar .shiny-input-container {
+  align-items: center;
+}
+
+.quarto-dashboard .toolbar .control-label {
+  font-size: 150%;
+}
+
+.quarto-dashboard .toolbar .selectize-input .item {
+  font-size: 130%;
+}

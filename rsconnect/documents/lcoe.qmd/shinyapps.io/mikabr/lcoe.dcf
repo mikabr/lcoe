@@ -1,0 +1,15 @@
+name: lcoe
+title: lcoe
+username: mikabr
+account: mikabr
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 13629508
+bundleId: 9552548
+url: https://mikabr.shinyapps.io/lcoe/
+version: 1
+quarto_version: 1.5.56
+quarto_engines: knitr
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .Rprofile|renv.lock

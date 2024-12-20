@@ -1,0 +1,268 @@
+---
+title: "Levelized Cost of Electricity"
+format:
+  dashboard:
+    theme: [cosmo, theme.scss]
+    mainfont: news-gothic
+server: shiny
+execute: 
+  echo: false
+  message: false
+  warning: false
+  error: false
+---
+
+```{r}
+#| context: setup
+#| include: false
+
+library(tidyverse)
+```
+
+```{r}
+#| context: data
+#| include: false
+#| cache: true
+
+ss <- "1HirbfvD4zSJQA1WZpBDb2gEnvqq6W5hK_oiMixyRcS0"
+param_vals <- googlesheets4::read_sheet(ss, sheet = "parameter values")
+param_meta <- googlesheets4::read_sheet(ss, sheet = "parameter metadata")
+
+param_data <- param_vals |>
+  na.omit() |>
+  pivot_longer(-c(State, Technology, Segment), names_to = "column", values_to = "value") |>
+  rename_with(tolower) |>
+  left_join(param_meta, by = "column") |>
+  filter(!is.na(variable)) |>
+  select(-column)
+
+dep_vals <- googlesheets4::read_sheet(ss, sheet = "depreciation values")
+dep_meta <- googlesheets4::read_sheet(ss, sheet = "depreciation metadata")
+
+deps <- dep_vals |>
+  pivot_longer(-year, names_to = "column", values_to = "d_i") |>
+  left_join(dep_meta, by = "column") |>
+  select(-column)
+
+output_meta <- googlesheets4::read_sheet(ss, sheet = "output metadata")
+```
+
+## {.toolbar}
+
+```{r}
+uiOutput("states")
+uiOutput("technologies")
+uiOutput("segments")
+# input <- list(state = "California", technology = "Solar", segment = "Utility")
+```
+
+## Row
+
+### Column {width=50%}
+
+```{r}
+#| content: card-sidebar
+
+uiOutput("input_ty")
+
+uiOutput("input_sp")
+uiOutput("input_cf")
+uiOutput("input_r")
+uiOutput("input_x")
+
+uiOutput("input_fix_op")
+
+uiOutput("input_var_op")
+uiOutput("input_fuel_cost")
+uiOutput("input_co2_cost")
+uiOutput("input_co2_perf")
+
+uiOutput("input_method")
+uiOutput("input_itc")
+uiOutput("input_a")
+
+# uiOutput("input_d")
+```
+
+```{r}
+#| title: LCOE Calculation -- editable input parameters
+
+tableOutput("loce_table_custom")
+```
+
+### Column {width=50%}
+
+```{r}
+#| content: card-sidebar
+
+uiOutput("default_ty")
+
+uiOutput("default_sp")
+uiOutput("default_cf")
+uiOutput("default_r")
+uiOutput("default_x")
+
+uiOutput("default_fix_op")
+
+uiOutput("default_var_op")
+uiOutput("default_fuel_cost")
+uiOutput("default_co2_cost")
+uiOutput("default_co2_perf")
+
+uiOutput("default_method")
+uiOutput("default_itc")
+uiOutput("default_a")
+```
+
+```{r}
+#| title: LCOE Calculation -- default input parameters
+
+tableOutput("loce_table")
+```
+
+```{r}
+#| context: server
+
+source("lcoe_helper.R")
+```
+
+```{r}
+#| context: server
+
+state_vals <- reactive(unique(param_data$state))
+output$states <- renderUI({
+  selectInput("state", "State", choices = state_vals(), selected = "California")
+})
+
+tech_vals <- reactive({
+  req(input$state)
+  param_data |> filter(state == input$state) |> pull(technology) |> unique()
+})
+output$technologies <- renderUI({
+  selectInput("technology", "Technology", choices = tech_vals())
+})
+
+seg_vals <- reactive({
+  req(input$state, input$technology)
+  param_data |> filter(state == input$state, technology == input$technology) |> pull(segment) |> unique()
+})
+output$segments <- renderUI({
+  selectInput("segment", "Segment", choices = seg_vals())
+})
+```
+
+```{r}
+#| context: server
+
+# default parameter values for selected state + technology + segment
+params <- reactive({
+  req(input$state, input$technology, input$segment)
+
+  param_data |>
+    filter(state == input$state, technology == input$technology, segment == input$segment) |>
+    select(variable, value) |>
+    deframe() |>
+    as.list()
+})
+
+# given a parameter, return a numericInput element for it
+plabel <- \(param) filter(param_meta, variable == param)$label
+input_generator <- reactive({
+  req(params())
+  \(param) numericInput(param, label = plabel(param), value = round(params()[[param]], 4))
+})
+
+# numericInput for each parameter
+output$input_ty <- renderUI(input_generator()("ty"))
+output$input_sp <- renderUI(input_generator()("sp"))
+output$input_cf <- renderUI(input_generator()("cf"))
+output$input_r <- renderUI(input_generator()("r"))
+output$input_x <- renderUI(input_generator()("x"))
+output$input_fix_op <- renderUI(input_generator()("fix_op"))
+output$input_var_op <- renderUI(input_generator()("var_op"))
+output$input_fuel_cost <- renderUI(input_generator()("fuel_cost"))
+output$input_co2_cost <- renderUI(input_generator()("co2_cost"))
+output$input_co2_perf <- renderUI(input_generator()("co2_perf"))
+output$input_itc <- renderUI(input_generator()("itc"))
+output$input_a <- renderUI(input_generator()("a"))
+
+# output$input_d <- renderUI(input_generator("d"))
+
+# selectInput for method
+output$input_method <- renderUI({
+  method_opts <- dep_meta |> select(label, method) |> deframe() |> as.list()
+  selectInput("method", label = plabel("method"),
+              choices = method_opts, selected = method_opts[params()[["method"]]])
+})
+
+output$default_ty <- renderUI(default_generator()("ty"))
+output$default_sp <- renderUI(default_generator()("sp"))
+output$default_cf <- renderUI(default_generator()("cf"))
+output$default_r <- renderUI(default_generator()("r"))
+output$default_x <- renderUI(default_generator()("x"))
+output$default_fix_op <- renderUI(default_generator()("fix_op"))
+output$default_var_op <- renderUI(default_generator()("var_op"))
+output$default_fuel_cost <- renderUI(default_generator()("fuel_cost"))
+output$default_co2_cost <- renderUI(default_generator()("co2_cost"))
+output$default_co2_perf <- renderUI(default_generator()("co2_perf"))
+output$default_itc <- renderUI(default_generator()("itc"))
+output$default_a <- renderUI(default_generator()("a"))
+
+default_generator <- reactive({
+  req(params())
+  \(param) {
+    def <- div(numericInput(paste0("default_", param), label = plabel(param), value = round(params()[[param]], 4)))
+    tagAppendAttributes(def, .cssSelector = "input", disabled = "true")
+  }
+})
+
+# selectInput for method
+output$default_method <- renderUI({
+  method_opts <- dep_meta |> select(label, method) |> deframe() |> as.list()
+  def <- div(selectInput("method", label = plabel("method"),
+                         choices = method_opts, selected = method_opts[params()[["method"]]]))
+  tagAppendAttributes(def, .cssSelector = "*", disabled = "true")
+})
+
+# input parameter values
+params_custom <- reactive({
+  list(ty = input$ty,
+       sp = input$sp,
+       cf = input$cf,
+       r = input$r,
+       x = input$x,
+       fix_op = input$fix_op,
+       var_op = input$var_op,
+       fuel_cost = input$fuel_cost,
+       co2_cost = input$co2_cost,
+       co2_perf = input$co2_perf,
+       method = input$method,
+       itc = input$itc,
+       a = input$a)
+})
+
+format_lcoe <- \(lcoe_df) {
+  lcoe_df |> enframe(name = "variable") |>
+    left_join(output_meta, by = "variable") |> select(name, symbol, value, units)
+}
+```
+
+```{r}
+#| context: server
+
+# output for input parameter values
+output$loce_table_custom <- renderTable(colnames = FALSE, digits = 4, na = "", {
+  req(params_custom())
+  compute_lcoe(params_custom(), deps) |> format_lcoe()
+})
+```
+
+```{r}
+#| context: server
+
+# output for default parameter values
+output$loce_table <- renderTable(colnames = FALSE, digits = 4, na = "", {
+  req(params())
+  compute_lcoe(params(), deps) |> format_lcoe()
+})
+```
